@@ -4,3 +4,177 @@ title:  "Using UDPipe 2"
 date:   2021-05-14 00:04:39 -0300
 categories: parsing
 ---
+
+# Running UDPipe 2
+
+UDPipe is a well-known tokenizer/tagger/parser for [Universal Dependencies](https://universaldependencies.org/). The first version (currently 1.9.3) is easy to install and train models (not easy to train only a tagger, though).
+Nonetheless, it isn't easy to use the [UDPipe2](https://github.com/ufal/udpipe/tree/udpipe-2), where at this moment, doesn't have documentation since it is a prototype, as mentioned by the author [here](https://github.com/ufal/udpipe/issues/74#issuecomment-709318410), and soon a more stable will be available (UDPipe 3).
+
+I tried to use the code from UDPipe 2 prototype to train my models, which should be possible since the authors published results based on that code. The following sections are going through the whole procedure to train UDPipe 2 models. 
+
+## Requirements
+
+* Python <= 3.7
+* [virtualenv](https://pypi.org/project/virtualenv/)
+
+## Setup environment
+
+Run the following commands to download and setup udpipe2:
+
+```bash
+git clone https://github.com/ufal/udpipe udpipe2
+cd udpipe2
+git checkout udpipe-2
+python3 -m venv env
+source env/bin/activate
+pip install -r requirements.txt
+```
+
+There is one more dependency that we should install, the `wembedding_service` that is a submodule from udpipe2. However, the submodule URL is broken, so we are going to manually download this dependency:
+
+```bash
+rm -rf wembedding_service
+git clone https://github.com/ufal/wembedding_service
+```
+
+## Download datasets 
+
+In my case, I wanted to train UDPipe 2 on the Bosque Treebank, located [here](https://github.com/UniversalDependencies/UD_Portuguese-Bosque), putting the datasets inside a separated folder:
+
+```bash
+mkdir datasets 
+git clone https://github.com/UniversalDependencies/UD_Portuguese-Bosque datasets/bosque
+```
+
+## Creating npz files
+
+The UDPipe2 firstly processes all sentences from your datasets folder to a .npz file, that is a zip containing the calculated embeddings from a BERT model. 
+
+Firstly, edit the script inside `udpipe2/scripts/compute_embeddings.sh`, from:
+
+```bash
+
+#!/bin/sh
+[ $# -ge 1 ] || { echo Usage: $0 data_directory embedding_args... >&2; exit 1; }
+data="$1"; shift
+
+for d in $data/*/; do
+  for f in $d*.conllu; do
+    [ $f.npz -nt $f ] && continue
+    qsub -p 0 -q gpu* -l gpu=1,mem_free=8G,h_data=16G -j y -o $f.log withcuda101 wembedding_service/venv/bin/python wembedding_service/compute_wembeddings.py --format=conllu $f $f.npz "$@"
+  done
+done
+```
+
+to:
+
+```bash
+#!/bin/sh
+
+[ $# -ge 1 ] || { echo Usage: $0 data_directory embedding_args... >&2; exit 1; }
+data="$1"; shift
+
+for d in $data/*/; do
+  for f in $d*.conllu; do
+    [ $f.npz -nt $f ] && continue
+    wembedding_service/venv/bin/python wembedding_service/compute_wembeddings.py --format=conllu $f $f.npz "$@"
+  done
+done
+```
+
+The `qsub` command that we removed is only used if you are running on a cluster, which isn't my case. 
+
+### Install wembeddings_service dependencies
+
+The next step is to install `wembeddings_service` requirements, for that we will need to create another environment since it works with a newer TensorFlow version. Firstly, deactivate from the current environment:
+
+> UDPipe 2 uses tensorflow-gpu==1.15.4, wembeddings_service usa tensorflow==2.3.1
+
+
+```bash
+deactivate
+```
+
+Then, create the new environment and install the dependencies:
+
+```bash
+cd wembeddings_service
+python3 -m venv we_env
+source we_env/bin/activate
+pip install - requirements.txt
+```
+
+> For the next step, double-check if your Tensorflow version is at 2.3.1.
+
+Next, we are going to execute the creation of the .npz files:
+
+```bash
+cd udpipe2
+bash scripts/compute_embeddings.sh datasets
+```
+
+If everything is ok, you should see .npz files created inside your datasets subfolders, for UD-Bosque the structure I got is:
+
+```
+datasets/
+  bosque/
+    pt_bosque-ud-train.conllu
+    pt_bosque-ud-train.conllu.npz
+    pt_bosque-ud-test.conllu
+    pt_bosque-ud-test.conllu.npz
+    pt_bosque-ud-dev.conllu
+    pt_bosque-ud-dev.conllu.npz
+```
+
+Every CoNLL-U file should be followed by a .npz file.
+
+## Training UDPipe2
+
+```bash
+cd udpipe2
+python3 udpipe2.py my-model --train datasets/bosque/pt_bosque-id-train.conllu
+```
+
+There will be no output at the standard output, UDPipe2 creates a log file that you can tail it located at `my-model/log`.
+
+## Predicting CoNLL-U data
+
+Now that you have a trained model, you can easily predict new data with: 
+
+```bash
+cd udpipe
+python udpipe2.py my-model --predict --predict_input in.conllu --predict_output out.conllu
+```
+
+> Observe that my-model is the path to our trained model.
+
+## Evaluating your model
+
+After predicting your input data, you can evaluate it with a gold standard file and your `out.conllu` file.
+
+```bash
+cd udpipe2
+python udpipe2_eval.py gold_standard.conllu out.conllu --verbose
+```
+
+The output should be similar to:
+
+```bash
+Metric     | Precision |    Recall |  F1 Score | AligndAcc
+-----------+-----------+-----------+-----------+-----------
+Tokens     |    100.00 |    100.00 |    100.00 |
+Sentences  |    100.00 |    100.00 |    100.00 |
+Words      |    100.00 |    100.00 |    100.00 |
+UPOS       |     90.92 |     90.92 |     90.92 |     90.92
+XPOS       |    100.00 |    100.00 |    100.00 |    100.00
+UFeats     |    100.00 |    100.00 |    100.00 |    100.00
+AllTags    |     90.92 |     90.92 |     90.92 |     90.92
+Lemmas     |    100.00 |    100.00 |    100.00 |    100.00
+UAS        |      0.00 |      0.00 |      0.00 |      0.00
+LAS        |      0.00 |      0.00 |      0.00 |      0.00
+CLAS       |      0.00 |      0.00 |      0.00 |      0.00
+MLAS       |      0.00 |      0.00 |      0.00 |      0.00
+BLEX       |      0.00 |      0.00 |      0.00 |      0.00
+```
+
+And that's it! Thank you for reading this far :)
