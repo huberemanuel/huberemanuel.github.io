@@ -1,0 +1,7 @@
+---
+layout: single
+title:  "Using UDPipe 2"
+date:   2021-05-14 00:04:39 -0300
+categories: parsing
+---
+
