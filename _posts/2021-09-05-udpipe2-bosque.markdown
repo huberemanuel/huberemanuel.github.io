@@ -10,6 +10,8 @@ categories: dependency-parsing
 This tutorial is a sequence in a previous [tutorial](https://huberemanuel.github.io/parsing/udpipe2/) that shows how to install UDPipe 2.
 In this tutorial, we are going to train UDPipe 2 on the Bosque treebank, which is a Brazilian Portuguese treebank annotated from news articles firstly created in 2008, and by 2016 was ported into Universal Dependencies format.
 
+> Although this tutorial focuses on the Bosque treebank. The reader should be able to easily extended to other treebanks.
+
 ## Downloading the dataset
 
 Bosque is available at [Github](https://github.com/UniversalDependencies/UD_Portuguese-Bosque), and currently, it's on the 2.8 version.
@@ -39,6 +41,17 @@ cd ~/udpipe
 python3 udpipe2.py my-model --train ~/UD_Portuguese-Bosque/pt_bosque-ud-train.conllu \
                             --dev ~/UD_Portuguese-Bosque/pt_bosque-ud-dev.conllu \
                             --epochs 8:1e-3,8:1e-4
+```
+
+Additionaly, if you wanna to train only for a specific task, then you should pass the `--tags` parameter with one (or more) values from "UPOS,XPOS,FEATS,LEMMAS". 
+For example, the following command will train only for UPOS taks:
+
+```bash
+cd ~/udpipe
+python3 udpipe2.py my-model --train ~/UD_Portuguese-Bosque/pt_bosque-ud-train.conllu \
+                            --dev ~/UD_Portuguese-Bosque/pt_bosque-ud-dev.conllu \
+                            --epochs 8:1e-3,8:1e-4 \
+                            --tags "UPOS"
 ```
 
 The resulting model will be saved inside `udpipe2/my-model` folder. 
