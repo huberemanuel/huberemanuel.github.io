@@ -132,7 +132,7 @@ Every CoNLL-U file should be followed by a .npz file.
 
 ```bash
 cd udpipe2
-python3 udpipe2.py my-model --train datasets/bosque/pt_bosque-id-train.conllu
+python3 udpipe2.py my-model --train datasets/bosque/pt_bosque-ud-train.conllu
 ```
 
 There will be no output at the standard output, UDPipe2 creates a log file that you can tail it located at `my-model/log`.
